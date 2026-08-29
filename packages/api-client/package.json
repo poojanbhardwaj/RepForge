@@ -1,0 +1,26 @@
+{
+  "name": "@repforge/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../../backend/openapi/openapi.yaml --output src/generated/schema.d.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

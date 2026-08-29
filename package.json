@@ -1,0 +1,42 @@
+{
+  "name": "repforge",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=24.16.0 <25",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "help": "node tools/repforge.mjs help",
+    "doctor": "node tools/repforge.mjs doctor",
+    "setup": "node tools/repforge.mjs setup",
+    "infra:up": "node tools/repforge.mjs infra:up",
+    "infra:down": "node tools/repforge.mjs infra:down",
+    "db:migrate": "node tools/repforge.mjs db:migrate",
+    "db:seed": "node tools/repforge.mjs db:seed",
+    "dev": "node tools/repforge.mjs dev",
+    "generate": "node tools/repforge.mjs generate",
+    "generate:check": "node tools/repforge.mjs generate:check",
+    "format": "node tools/repforge.mjs format",
+    "format:check": "node tools/repforge.mjs format:check",
+    "lint": "node tools/repforge.mjs lint",
+    "typecheck": "node tools/repforge.mjs typecheck",
+    "test": "node tools/repforge.mjs test",
+    "test:integration": "node tools/repforge.mjs test:integration",
+    "build": "node tools/repforge.mjs build",
+    "images:verify": "node tools/repforge.mjs images:verify",
+    "images:production-gate": "node tools/repforge.mjs images:production-gate",
+    "secrets": "node tools/repforge.mjs secrets",
+    "security": "node tools/repforge.mjs security",
+    "smoke": "node tools/repforge.mjs smoke",
+    "verify": "node tools/repforge.mjs verify",
+    "clean": "node tools/repforge.mjs clean"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.49.0",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3"
+  }
+}

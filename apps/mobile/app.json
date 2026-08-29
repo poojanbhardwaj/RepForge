@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "RepForge",
+    "slug": "repforge",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "scheme": "repforge",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "autolinkingModuleResolution": true
+    },
+    "android": {
+      "package": "local.repforge.bootstrap"
+    },
+    "ios": {
+      "bundleIdentifier": "local.repforge.bootstrap",
+      "supportsTablet": true
+    }
+  }
+}

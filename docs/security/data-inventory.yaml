@@ -1,0 +1,39 @@
+version: 1
+reviewed: 2026-08-28
+fields:
+  - name: users.id
+    purpose: opaque account ownership key
+    classification: confidential
+    legal_basis: consent_or_contract_pending_legal_review
+    storage: postgresql
+    recipients: [repforge_api]
+    retention: account_lifetime_plus_deletion_window_tbd
+    deletion_path: account_deletion_job_tbd
+    owner: product_security_tbd
+  - name: identity_refs.provider_subject
+    purpose: map verified identity to account
+    classification: confidential
+    legal_basis: account_service_pending_legal_review
+    storage: postgresql
+    recipients: [repforge_api]
+    retention: account_lifetime_plus_security_window_tbd
+    deletion_path: account_deletion_job_tbd
+    owner: identity_owner_tbd
+  - name: user_profiles.display_name
+    purpose: personalize the user interface
+    classification: confidential
+    legal_basis: consent_pending_legal_review
+    storage: postgresql
+    recipients: [repforge_api, user_mobile_app]
+    retention: account_lifetime
+    deletion_path: account_deletion_job_tbd
+    owner: product_owner_tbd
+  - name: consents.document_version_and_time
+    purpose: evidence of versioned user choice
+    classification: confidential
+    legal_basis: compliance_pending_legal_review
+    storage: postgresql
+    recipients: [repforge_api, authorized_privacy_operations_tbd]
+    retention: legal_retention_tbd
+    deletion_path: privacy_retention_policy_tbd
+    owner: privacy_owner_tbd

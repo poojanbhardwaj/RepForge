@@ -1,0 +1,18 @@
+{
+  "name": "@repforge/ui-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

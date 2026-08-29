@@ -1,0 +1,7 @@
+# Mounted only while scanning the exact PostgreSQL 18.6 manifest pinned in compose.yaml.
+vulnerabilities:
+  - id: CVE-2026-14456
+    expired_at: 2026-09-30
+    statement: >-
+      This denial of service affects OpenSSL QUIC servers. The loopback-only
+      PostgreSQL bootstrap service exposes TCP and does not implement QUIC.

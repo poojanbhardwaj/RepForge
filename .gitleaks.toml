@@ -1,0 +1,21 @@
+title = "RepForge secret scanning policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependency and build output is not source input"
+paths = [
+  '''(^|/)\.git/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.pnpm-store/''',
+  '''(^|/)\.cache/''',
+  '''(^|/)coverage/''',
+  '''(^|/)dist/''',
+  '''(^|/)apps/mobile/\.expo/''',
+  '''(^|/)apps/mobile/web-build/''',
+  '''(^|/)apps/web/\.next/''',
+  '''(^|/)apps/web/out/''',
+  '''(^|/)backend/bin/''',
+  '''(^|/)backend/coverage\.out$''',
+]

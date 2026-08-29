@@ -1,0 +1,7 @@
+extends:
+  - recommended-strict
+
+rules:
+  # Liveness/version GETs deliberately have no fabricated 4xx response.
+  operation-4xx-response: off
+  no-server-example.com: off

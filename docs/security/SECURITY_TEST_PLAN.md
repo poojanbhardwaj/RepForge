@@ -1,0 +1,7 @@
+# Security test plan
+
+Bootstrap automation covers literal-loopback environment isolation, negative ownership/authentication, strict parsing and limits, bounded profile cancellation with one sanitized timeout response, authoritative repeatable-read optimistic updates with post-commit update/disable barriers, dirty mobile draft/conflict preservation, executable space/Unicode workspace-path discovery, matched-route logging redaction, migration constraints, complete installed-graph dependency auditing, Go SAST/vulnerability checks, digest-pinned working-tree/history secret scanning with no file-wide/path-wide credential exclusion and with unrelated same-file, nested-file, and disposable prior-history canaries, immutable image manifest resolution, local-only exact-image CVE waivers, production scans that mount no local waiver, explicit missing-inventory handling, executable contract-route validation, and container-boundary smoke tests with exact build metadata.
+
+Every milestone adds abuse cases and authorization tests for its new trust boundaries. Staging later receives DAST, rate-limit/load abuse, mobile static/dynamic analysis, secret/key rotation, deletion/export, backup restore, alert delivery, and rollback exercises.
+
+Before public launch, a qualified independent tester must cover API, web, mobile builds, cloud configuration, authorization, and business logic. Intrusive production testing is prohibited without approved rules of engagement. Critical/high findings block release; medium exceptions require impact, compensating control, owner, and expiry.
