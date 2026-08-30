@@ -10,8 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"repforge.local/backend/internal/auth"
+	"repforge.local/backend/internal/onboarding"
 	apiserver "repforge.local/backend/internal/platform/api"
 	"repforge.local/backend/internal/platform/config"
 	"repforge.local/backend/internal/platform/database"
@@ -50,11 +52,20 @@ func run() error {
 
 	repository := users.NewPostgresRepository(pool)
 	userHandler := users.NewHandler(users.NewService(repository))
-	authenticator := auth.NewDevAuthenticator(cfg.DevAuthToken, cfg.DevAuthProvider, cfg.DevAuthSubject)
+	authenticator, clientSources, err := buildAuthenticator(cfg)
+	if err != nil {
+		return err
+	}
+	onboardingRepository := onboarding.NewPostgresRepository(pool)
+	onboardingHandler := onboarding.NewHandler(
+		onboarding.NewService(onboardingRepository, cfg.TermsVersion, cfg.PrivacyVersion),
+		clientSources,
+	)
 	mux := apiserver.NewRouter(apiserver.Options{
 		Readiness: pool, ReadinessTimeout: cfg.ReadinessTimeout, Users: userHandler,
-		Authenticator: authenticator,
-		Build:         apiserver.BuildInfo{Version: version, Commit: commit, BuiltAt: builtAt},
+		Onboarding: onboardingHandler, Authenticator: authenticator,
+		CORSAllowedOrigin: cfg.CORSAllowedOrigin,
+		Build:             apiserver.BuildInfo{Version: version, Commit: commit, BuiltAt: builtAt},
 	})
 
 	handler := newHTTPHandler(logger, mux)
@@ -90,6 +101,24 @@ func run() error {
 		}
 		return fmt.Errorf("serve HTTP: %w", err)
 	}
+}
+
+func buildAuthenticator(cfg config.Config) (auth.Authenticator, map[string]string, error) {
+	if cfg.AuthMode == "dev" {
+		return auth.NewDevAuthenticator(cfg.DevAuthToken, cfg.DevAuthProvider, cfg.DevAuthSubject),
+			map[string]string{"repforge-dev-client": "synthetic_local"}, nil
+	}
+	authenticator, err := auth.NewOIDCAuthenticator(auth.OIDCOptions{
+		Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience, AllowedClientIDs: cfg.OIDCClientIDs,
+		ClockSkew: 30 * time.Second,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("OIDC authenticator: %w", err)
+	}
+	return authenticator, map[string]string{
+		cfg.OIDCClientIDs[0]: "mobile",
+		cfg.OIDCClientIDs[1]: "web",
+	}, nil
 }
 
 func newHTTPHandler(logger *slog.Logger, mux http.Handler) http.Handler {

@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -29,7 +29,7 @@ const go = process.platform === "win32" ? "go.exe" : "go";
 const goCache = join(root, ".cache", "go-build");
 const expoHome = join(root, ".cache", "expo");
 const pureGoEnv = { ...process.env, CGO_ENABLED: "0", GOCACHE: goCache };
-const bootstrapVersion = "0.1.0-bootstrap";
+const milestoneVersion = "0.2.0-milestone1";
 export const TRIVY_IMAGE =
   "aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c";
 export const GITLEAKS_IMAGE =
@@ -195,12 +195,14 @@ function createLocalEnv() {
   const devToken = `dev_${randomBytes(24).toString("base64url")}`;
   const garageAccessKey = `GK${randomBytes(16).toString("hex").toUpperCase()}`;
   const garageSecretKey = randomBytes(32).toString("hex");
+  const auth0CookieSecret = randomBytes(32).toString("hex");
   const value = readFileSync(join(root, ".env.example"), "utf8")
     .replaceAll("__GENERATED_POSTGRES_PASSWORD__", postgresPassword)
     .replaceAll("__GENERATED_REDIS_PASSWORD__", redisPassword)
     .replaceAll("__GENERATED_DEV_AUTH_TOKEN__", devToken)
     .replaceAll("__GENERATED_GARAGE_ACCESS_KEY__", garageAccessKey)
-    .replaceAll("__GENERATED_GARAGE_SECRET_KEY__", garageSecretKey);
+    .replaceAll("__GENERATED_GARAGE_SECRET_KEY__", garageSecretKey)
+    .replaceAll("__GENERATED_AUTH0_COOKIE_SECRET__", auth0CookieSecret);
   writeFileSync(envPath, value, { encoding: "utf8", mode: 0o600, flag: "wx" });
   console.log("Created .env.local with synthetic local-only credentials.");
 }
@@ -458,7 +460,13 @@ export function inspectGitRepository(repositoryRoot) {
 }
 
 function gitCommit() {
-  return inspectGitRepository(root).headCommit;
+  const repository = inspectGitRepository(root);
+  if (!repository.headCommit) return undefined;
+  const changes = execute("git", ["status", "--porcelain", "--untracked-files=normal"], {
+    cwd: root,
+    capture: true,
+  });
+  return changes ? undefined : repository.headCommit;
 }
 
 export function gitleaksCanary() {
@@ -471,6 +479,7 @@ const syntheticLocalSecretRules = Object.freeze([
   ["REDIS_PASSWORD", /^[A-Za-z0-9_-]{32}$/],
   ["GARAGE_ACCESS_KEY", /^GK[A-F0-9]{32}$/],
   ["GARAGE_SECRET_KEY", /^[a-f0-9]{64}$/],
+  ["AUTH0_SECRET", /^[a-f0-9]{64}$/],
 ]);
 
 export function syntheticFixtureAllowlist(environmentText = "") {
@@ -787,7 +796,7 @@ function scanSecrets() {
 
 export function resolveBuildMetadata({ env = process.env, commit, now = new Date() } = {}) {
   const metadata = {
-    version: env.REPFORGE_BUILD_VERSION ?? bootstrapVersion,
+    version: env.REPFORGE_BUILD_VERSION ?? milestoneVersion,
     commit: env.REPFORGE_BUILD_COMMIT ?? env.GITHUB_SHA ?? commit ?? "uncommitted",
     builtAt: env.REPFORGE_BUILD_TIME ?? now.toISOString(),
   };
@@ -869,6 +878,7 @@ function generate() {
 function generateCheck() {
   const paths = [
     join(backend, "internal", "users", "db"),
+    join(backend, "internal", "onboarding", "db"),
     join(root, "packages", "api-client", "src", "generated"),
   ];
   const before = snapshot(paths);
@@ -968,6 +978,108 @@ async function smoke() {
     const unauthenticated = await fetch("http://127.0.0.1:8080/v1/me");
     if (unauthenticated.status !== 401)
       throw new Error(`unauthenticated request returned ${unauthenticated.status}`);
+    const onboardingResponse = await fetch("http://127.0.0.1:8080/v1/onboarding", { headers });
+    if (!onboardingResponse.ok)
+      throw new Error(`GET /v1/onboarding returned ${onboardingResponse.status}`);
+    const initialOnboarding = await onboardingResponse.json();
+    const onboardingKey = randomUUID();
+    if (
+      typeof initialOnboarding.requiredTermsVersion !== "string" ||
+      typeof initialOnboarding.requiredPrivacyVersion !== "string"
+    ) {
+      throw new Error("GET /v1/onboarding omitted required legal versions");
+    }
+    const allowedOrigin = env.CORS_ALLOWED_ORIGIN ?? "http://127.0.0.1:3000";
+    const onboardingBody = JSON.stringify({ currentStep: 2 });
+    const onboardingHeaders = {
+      ...headers,
+      "Content-Type": "application/json",
+      "Idempotency-Key": onboardingKey,
+    };
+    const onboardingUpdate = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      method: "PATCH",
+      headers: onboardingHeaders,
+      body: onboardingBody,
+    });
+    if (!onboardingUpdate.ok)
+      throw new Error(`PATCH /v1/onboarding returned ${onboardingUpdate.status}`);
+    const onboardingState = await onboardingUpdate.json();
+    if (
+      typeof onboardingState.version !== "number" ||
+      onboardingState.version !== initialOnboarding.version + 1 ||
+      onboardingState.currentStep < 2
+    ) {
+      throw new Error("PATCH /v1/onboarding did not persist one resumable progress update");
+    }
+    const onboardingReplay = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      method: "PATCH",
+      headers: onboardingHeaders,
+      body: onboardingBody,
+    });
+    if (
+      !onboardingReplay.ok ||
+      JSON.stringify(await onboardingReplay.json()) !== JSON.stringify(onboardingState)
+    ) {
+      throw new Error("onboarding idempotency replay was not authoritative");
+    }
+    const onboardingConflict = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      method: "PATCH",
+      headers: onboardingHeaders,
+      body: JSON.stringify({ currentStep: 3 }),
+    });
+    if (onboardingConflict.status !== 409)
+      throw new Error(`onboarding idempotency conflict returned ${onboardingConflict.status}`);
+    const completionResponse = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+        "Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify({
+        adultAttested: true,
+        termsVersion: initialOnboarding.requiredTermsVersion,
+        privacyVersion: initialOnboarding.requiredPrivacyVersion,
+        timezone: "UTC",
+        units: "metric",
+        primaryGoal: "strength",
+        experienceLevel: "beginner",
+        weeklyAvailability: 3,
+        sessionDurationMinutes: 45,
+        equipmentAccess: ["bodyweight"],
+        dietPreference: null,
+        safetyAcknowledged: true,
+        currentStep: 6,
+      }),
+    });
+    if (!completionResponse.ok)
+      throw new Error(`onboarding completion returned ${completionResponse.status}`);
+    const completedOnboarding = await completionResponse.json();
+    if (completedOnboarding.state !== "complete" || completedOnboarding.completedAt === null) {
+      throw new Error("onboarding completion was not persisted authoritatively");
+    }
+    const timezoneResponse = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+        "Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify({ timezone: "Asia/Kolkata" }),
+    });
+    if (!timezoneResponse.ok || (await timezoneResponse.json()).timezone !== "Asia/Kolkata") {
+      throw new Error("onboarding did not accept and persist an IANA timezone");
+    }
+    const allowedCORS = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      headers: { ...headers, Origin: allowedOrigin },
+    });
+    if (allowedCORS.headers.get("access-control-allow-origin") !== allowedOrigin)
+      throw new Error("allowed onboarding origin did not receive the exact CORS origin");
+    const deniedCORS = await fetch("http://127.0.0.1:8080/v1/onboarding", {
+      headers: { ...headers, Origin: "http://127.0.0.1:3001" },
+    });
+    if (deniedCORS.headers.has("access-control-allow-origin"))
+      throw new Error("unapproved onboarding origin received a CORS grant");
     console.log("Smoke test passed.");
   } finally {
     child.kill("SIGTERM");
@@ -1043,8 +1155,8 @@ function help() {
                     Fail unless every production image has inventory, SBOM, and provenance evidence
   secrets           Scan the working tree and Git history with digest-pinned Gitleaks
   security          Run secret, vulnerability, SAST, dependency, and image scans
-  smoke             Exercise the running profile vertical slice
-  verify            Run the core bootstrap verification suite
+  smoke             Exercise profile, onboarding, idempotency, and exact-origin flows
+  verify            Run the core Milestone 1 verification suite
   clean             Remove only allowlisted build/test outputs`);
 }
 

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  REPFORGE_BUILD_VERSION: 0.1.0-bootstrap
+  REPFORGE_BUILD_VERSION: 0.2.0-milestone1
   REPFORGE_BUILD_COMMIT: ${{ github.sha }}
 
 concurrency:
@@ -53,7 +53,7 @@ jobs:
       - name: Start synthetic local platform
         run: pnpm run setup
 
-      - name: Verify bootstrap
+      - name: Verify Milestone 1
         run: pnpm run verify
 
       - name: Go race tests

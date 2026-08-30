@@ -1,4 +1,4 @@
-import { createRepForgeClient } from "@repforge/api-client";
+import { createRepForgeClient, type RepForgeClient } from "@repforge/api-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 const authMode = process.env.EXPO_PUBLIC_AUTH_MODE;
@@ -49,6 +49,38 @@ export function isLiteralLoopbackHTTPOrigin(raw: string): boolean {
   }
 }
 
+export function isCanonicalHTTPSOrigin(raw: string): boolean {
+  if (!raw || raw.trim() !== raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.pathname === "/" &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      (raw === parsed.origin || raw === `${parsed.origin}/`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function validateOIDCApiOrigin({
+  apiOrigin,
+  isDevelopment,
+}: {
+  apiOrigin: string;
+  isDevelopment: boolean;
+}): void {
+  if (isCanonicalHTTPSOrigin(apiOrigin)) return;
+  if (isDevelopment && isLiteralLoopbackHTTPOrigin(apiOrigin)) return;
+  throw new Error(
+    "OIDC authentication requires a canonical HTTPS API origin, except for literal loopback HTTP during development.",
+  );
+}
+
 interface DevelopmentAccessTokenOptions {
   apiOrigin: string;
   authMode: string | undefined;
@@ -62,8 +94,20 @@ export function resolveDevelopmentAccessToken({
   token,
   isDevelopment,
 }: DevelopmentAccessTokenOptions): string | undefined {
-  const developmentCredentialsActive = configuredAuthMode === "dev" || Boolean(token);
-  if (!developmentCredentialsActive) return undefined;
+  if (configuredAuthMode !== undefined && !["dev", "oidc"].includes(configuredAuthMode)) {
+    throw new Error("EXPO_PUBLIC_AUTH_MODE must be dev or oidc.");
+  }
+  if (configuredAuthMode === "oidc") {
+    if (token) {
+      throw new Error("EXPO_PUBLIC_DEV_AUTH_TOKEN must be removed in OIDC mode.");
+    }
+    return undefined;
+  }
+  if (configuredAuthMode !== "dev") {
+    if (token) throw new Error("EXPO_PUBLIC_DEV_AUTH_TOKEN requires development auth mode.");
+    return undefined;
+  }
+  if (!token) throw new Error("Development authentication requires a local synthetic token.");
   if (!isLiteralLoopbackHTTPOrigin(apiOrigin)) {
     throw new Error(
       "Development authentication requires an HTTP origin with a literal loopback IP.",
@@ -74,7 +118,11 @@ export function resolveDevelopmentAccessToken({
       "Development authentication cannot be included in a non-development mobile build.",
     );
   }
-  return configuredAuthMode === "dev" ? token : undefined;
+  return token;
+}
+
+if (authMode === "oidc") {
+  validateOIDCApiOrigin({ apiOrigin: baseUrl, isDevelopment: __DEV__ });
 }
 
 const developmentAccessToken = resolveDevelopmentAccessToken({
@@ -84,7 +132,14 @@ const developmentAccessToken = resolveDevelopmentAccessToken({
   isDevelopment: __DEV__,
 });
 
-export const apiClient = createRepForgeClient({
-  baseUrl,
-  getAccessToken: () => developmentAccessToken,
-});
+export function createMobileApiClient(
+  getOIDCAccessToken?: () => Promise<string | undefined>,
+): RepForgeClient {
+  return createRepForgeClient({
+    baseUrl,
+    getAccessToken: () =>
+      authMode === "oidc" ? (getOIDCAccessToken?.() ?? undefined) : developmentAccessToken,
+  });
+}
+
+export const apiClient = createMobileApiClient();

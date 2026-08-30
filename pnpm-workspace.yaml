@@ -10,4 +10,5 @@ onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
 allowBuilds:
+  browser-tabs-lock: false
   unrs-resolver: true

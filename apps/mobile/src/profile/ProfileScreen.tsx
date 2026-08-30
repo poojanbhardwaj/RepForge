@@ -11,13 +11,24 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { apiClient } from "../api";
 import { profileSchema, type ProfileForm } from "./schema";
 
-const profileKey = ["profile", "me"] as const;
+function profileKey(cacheIdentity: string) {
+  return ["profile", "me", cacheIdentity] as const;
+}
 
-export function ProfileScreen({ client = apiClient }: { client?: RepForgeClient }) {
+export function ProfileScreen({
+  cacheIdentity = "local",
+  client = apiClient,
+  onLogout,
+}: {
+  cacheIdentity?: string;
+  client?: Pick<RepForgeClient, "getMe" | "updateMe">;
+  onLogout?: () => void;
+}) {
   const network = useNetInfo();
   const queryClient = useQueryClient();
+  const queryKey = profileKey(cacheIdentity);
   const profile = useQuery({
-    queryKey: profileKey,
+    queryKey,
     queryFn: ({ signal }) => client.getMe(signal),
     enabled: network.isConnected !== false,
     retry: 1,
@@ -35,12 +46,12 @@ export function ProfileScreen({ client = apiClient }: { client?: RepForgeClient 
       }),
     onSuccess: (value) => {
       baselineVersion.current = value.profile.version;
-      queryClient.setQueryData(profileKey, value);
+      queryClient.setQueryData(queryKey, value);
       form.reset({ displayName: value.profile.displayName });
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "version_conflict") {
-        void queryClient.invalidateQueries({ queryKey: profileKey });
+        void queryClient.invalidateQueries({ queryKey });
       }
     },
   });
@@ -159,6 +170,11 @@ export function ProfileScreen({ client = apiClient }: { client?: RepForgeClient 
         >
           <Text style={styles.buttonText}>{update.isPending ? "Saving…" : "Save profile"}</Text>
         </Pressable>
+        {onLogout ? (
+          <Pressable accessibilityRole="button" onPress={onLogout} style={styles.logout}>
+            <Text style={styles.logoutText}>Log out</Text>
+          </Pressable>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -216,4 +232,6 @@ const styles = StyleSheet.create({
   buttonPressed: { backgroundColor: colors.primaryPressed },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: colors.surface, fontSize: 17, fontWeight: "700" },
+  logout: { minHeight: touchTarget, alignItems: "center", justifyContent: "center" },
+  logoutText: { color: colors.danger, fontSize: 16, fontWeight: "600" },
 });

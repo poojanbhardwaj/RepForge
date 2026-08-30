@@ -1,6 +1,6 @@
 # RepForge
 
-RepForge is an India-first adaptive strength-training and nutrition adherence product. This repository currently implements the bootstrap profile vertical slice; it is not production-ready.
+RepForge is an India-first adaptive strength-training and nutrition adherence product. This repository implements the bootstrap profile slice and Milestone 1 authentication/onboarding slice; it is not production-ready.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ RepForge is an India-first adaptive strength-training and nutrition adherence pr
 - Corepack and pnpm 11.24.0
 - Docker Desktop with the WSL2 backend and Docker Compose
 
-Docker Desktop licensing must be appropriate for your organization. No AWS, OIDC, billing, Expo, or other hosted-service account is required.
+Docker Desktop licensing must be appropriate for your organization. The default synthetic, loopback-only workflow needs no hosted-service account. Live OIDC testing requires separately configured Auth0 native and regular-web applications; this repository does not create or modify them.
 
 ## First run
 
@@ -21,7 +21,7 @@ pnpm run setup
 pnpm run smoke
 ```
 
-`setup` creates an ignored `.env.local` containing synthetic local credentials, verifies that the HTTP bind and PostgreSQL, Redis, and S3 URLs use literal loopback IPs, starts PostgreSQL, Redis, and Garage on loopback interfaces, applies migrations, and inserts one synthetic development profile. There is no remote-dependency or wildcard-bind escape hatch in the bootstrap.
+`setup` creates an ignored `.env.local` containing synthetic local credentials and a generated web-session key, verifies that the HTTP bind and PostgreSQL, Redis, and S3 URLs use literal loopback IPs, starts PostgreSQL, Redis, and Garage on loopback interfaces, applies migrations, and inserts one synthetic development profile. Auth0 client placeholders remain intentionally unusable until supplied manually. There is no remote-dependency or wildcard-bind escape hatch.
 
 Start all development processes with:
 
@@ -38,7 +38,7 @@ pnpm run dev
 
 See [the local runbook](docs/runbooks/LOCAL_DEVELOPMENT.md) for individual services and troubleshooting.
 
-Expo starts with `--host localhost`; the synthetic bearer token must not be served over LAN. Physical-device LAN development is intentionally unsupported until real device authentication exists.
+Expo starts with `--host localhost`; the synthetic bearer token must not be served over LAN. The optional OIDC development-client workflow and required manual callback/logout configuration are documented in [the Auth0 verification runbook](docs/runbooks/AUTH0_LOCAL_VERIFICATION.md).
 
 ## Verification
 
@@ -66,4 +66,4 @@ waivers.
 
 ## Current boundaries
 
-The local bearer identity is a deterministic development adapter and cannot be enabled in staging or production. Real OIDC, workouts, progression, nutrition, billing, admin operations, Terraform, deployment, native store builds, and production security evidence remain intentionally incomplete; see [production readiness](docs/PRODUCTION_READINESS.md).
+The deterministic bearer identity remains available only in local/test. Real app paths support Auth0 Authorization Code + PKCE on mobile and an Auth0 v4 server session/BFF on web; the API validates issuer, audience, client, signature, time claims, and scopes. Onboarding is resumable and version-gates adult, legal-consent, preference, and safety completion. Live tenant/device verification is still manual and unperformed in this run. Workouts, progression, nutrition, billing, admin operations, Terraform, deployment, native store releases, and production security evidence remain intentionally incomplete; see [production readiness](docs/PRODUCTION_READINESS.md).

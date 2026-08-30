@@ -14,7 +14,9 @@ import (
 	"github.com/google/uuid"
 
 	"repforge.local/backend/internal/auth"
+	"repforge.local/backend/internal/onboarding"
 	apiserver "repforge.local/backend/internal/platform/api"
+	"repforge.local/backend/internal/platform/httpx"
 	"repforge.local/backend/internal/users"
 )
 
@@ -52,6 +54,18 @@ func (readyChecker) Ping(context.Context) error { return nil }
 
 type contractRepository struct {
 	profile users.Profile
+}
+
+type contractOnboardingHandler struct {
+	state onboarding.State
+}
+
+func (handler contractOnboardingHandler) Get(response http.ResponseWriter, _ *http.Request) {
+	httpx.WriteJSON(response, http.StatusOK, handler.state)
+}
+
+func (handler contractOnboardingHandler) Update(response http.ResponseWriter, _ *http.Request) {
+	httpx.WriteJSON(response, http.StatusOK, handler.state)
 }
 
 func (repository *contractRepository) Get(context.Context, users.Identity) (users.Profile, error) {
@@ -101,6 +115,18 @@ func TestProfileHandlerResponsesMatchContractSchemas(t *testing.T) {
 		}
 		validateResponseSchema(t, document, "ErrorEnvelope", response)
 	})
+}
+
+func TestOnboardingHandlerResponseMatchesContractSchema(t *testing.T) {
+	document := loadContract(t)
+	request := httptest.NewRequest(http.MethodGet, "/v1/onboarding", nil)
+	request.Header.Set("Authorization", "Bearer configured-local-token")
+	response := httptest.NewRecorder()
+	newContractRouter().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", response.Code, response.Body.String())
+	}
+	validateResponseSchema(t, document, "OnboardingState", response)
 }
 
 func TestContractRoutesExecuteAgainstRealRouter(t *testing.T) {
@@ -154,7 +180,12 @@ func newContractRouter() http.Handler {
 	}}
 	return apiserver.NewRouter(apiserver.Options{
 		Readiness: readyChecker{}, ReadinessTimeout: time.Second,
-		Users:         users.NewHandler(users.NewService(repository)),
+		Users: users.NewHandler(users.NewService(repository)),
+		Onboarding: contractOnboardingHandler{state: onboarding.State{
+			UserID: uuid.MustParse("01993c86-8fc9-7a5a-9b8d-3302c7e917ec"), State: "in_progress",
+			CurrentStep: 1, Version: 1, EquipmentAccess: []string{}, CreatedAt: now, UpdatedAt: now,
+			RequiredTermsVersion: "draft-local-1", RequiredPrivacyVersion: "draft-local-1",
+		}},
 		Authenticator: auth.NewDevAuthenticator("configured-local-token", "repforge-dev", "local-user"),
 		Build: apiserver.BuildInfo{
 			Version: "0.1.0-test", Commit: strings.Repeat("a", 40), BuiltAt: "2026-08-29T00:00:00Z",

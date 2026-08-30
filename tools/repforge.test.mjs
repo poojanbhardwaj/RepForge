@@ -156,6 +156,11 @@ test("secret scanner uses exact fixture values and the real directory/history co
   const syntheticPassword = "Ab3d".repeat(8);
   const allowedLines = syntheticFixtureAllowlist(`POSTGRES_PASSWORD=${syntheticPassword}\n`);
   assert.deepEqual([...allowedLines], [[1, "POSTGRES_PASSWORD"]]);
+  const syntheticAuth0Secret = "a1b2".repeat(16);
+  assert.deepEqual(
+    [...syntheticFixtureAllowlist(`AUTH0_SECRET=${syntheticAuth0Secret}\n`)],
+    [[1, "AUTH0_SECRET"]],
+  );
   assert.throws(
     () => syntheticFixtureAllowlist("POSTGRES_PASSWORD=not-generated\n"),
     /refusing allowlist/,

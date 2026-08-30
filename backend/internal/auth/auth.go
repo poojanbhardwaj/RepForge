@@ -9,10 +9,14 @@ import (
 )
 
 var ErrUnauthenticated = errors.New("unauthenticated")
+var ErrForbidden = errors.New("forbidden")
+var ErrEmailUnverified = errors.New("email is not verified")
 
 type Principal struct {
 	Provider string
 	Subject  string
+	ClientID string
+	Scopes   []string
 	Roles    []string
 }
 
@@ -35,6 +39,8 @@ func NewDevAuthenticator(token, provider, subject string) *DevAuthenticator {
 		principal: Principal{
 			Provider: provider,
 			Subject:  subject,
+			ClientID: "repforge-dev-client",
+			Scopes:   []string{"profile:read", "profile:write"},
 			Roles:    []string{"user"},
 		},
 	}
@@ -57,19 +63,46 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 func Middleware(authenticator Authenticator, unauthorized func(http.ResponseWriter, *http.Request)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			header := request.Header.Get("Authorization")
-			parts := strings.SplitN(header, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
+			headers := request.Header.Values("Authorization")
+			if len(headers) != 1 {
 				unauthorized(response, request)
 				return
 			}
-			principal, err := authenticator.Authenticate(request.Context(), strings.TrimSpace(parts[1]))
+			parts := strings.Fields(headers[0])
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				unauthorized(response, request)
+				return
+			}
+			principal, err := authenticator.Authenticate(request.Context(), parts[1])
 			if err != nil {
 				unauthorized(response, request)
 				return
 			}
 			ctx := context.WithValue(request.Context(), principalKey{}, principal)
 			next.ServeHTTP(response, request.WithContext(ctx))
+		})
+	}
+}
+
+func RequireScopes(required []string, forbidden func(http.ResponseWriter, *http.Request, []string)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			principal, ok := PrincipalFromContext(request.Context())
+			if !ok {
+				forbidden(response, request, required)
+				return
+			}
+			granted := make(map[string]struct{}, len(principal.Scopes))
+			for _, scope := range principal.Scopes {
+				granted[scope] = struct{}{}
+			}
+			for _, scope := range required {
+				if _, ok := granted[scope]; !ok {
+					forbidden(response, request, required)
+					return
+				}
+			}
+			next.ServeHTTP(response, request)
 		})
 	}
 }

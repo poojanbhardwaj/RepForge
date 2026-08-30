@@ -73,6 +73,27 @@ export interface paths {
     patch: operations["updateMe"];
     trace?: never;
   };
+  "/v1/onboarding": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Resume the authenticated user's onboarding
+     * @description Creates an empty server-side onboarding record on first access and returns saved progress.
+     */
+    get: operations["getOnboarding"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Save partial onboarding progress idempotently */
+    patch: operations["updateOnboarding"];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -112,6 +133,60 @@ export interface components {
       displayName: string;
       /** Format: int64 */
       expectedVersion: number;
+    };
+    OnboardingState: {
+      /** Format: uuid */
+      userId: string;
+      /** @enum {string} */
+      state: "in_progress" | "complete";
+      currentStep: number;
+      /** Format: int64 */
+      version: number;
+      adultAttestedAt: string | null;
+      termsVersion: string | null;
+      termsAcceptedAt: string | null;
+      privacyVersion: string | null;
+      privacyAcceptedAt: string | null;
+      timezone: string | null;
+      units: ("metric" | "imperial") | null;
+      primaryGoal: ("strength" | "muscle" | "general_fitness") | null;
+      experienceLevel: ("beginner" | "intermediate") | null;
+      weeklyAvailability: number | null;
+      sessionDurationMinutes: number | null;
+      equipmentAccess: (
+        "bodyweight" | "dumbbells" | "barbell" | "rack" | "bench" | "cables" | "machines" | "bands"
+      )[];
+      dietPreference: ("vegetarian" | "eggetarian" | "vegan" | "omnivore") | null;
+      safetyAcknowledgedAt: string | null;
+      completedAt: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+      requiredTermsVersion: string;
+      requiredPrivacyVersion: string;
+    };
+    UpdateOnboarding: {
+      /** @constant */
+      adultAttested?: true;
+      termsVersion?: string;
+      privacyVersion?: string;
+      timezone?: string;
+      /** @enum {string} */
+      units?: "metric" | "imperial";
+      /** @enum {string} */
+      primaryGoal?: "strength" | "muscle" | "general_fitness";
+      /** @enum {string} */
+      experienceLevel?: "beginner" | "intermediate";
+      weeklyAvailability?: number;
+      sessionDurationMinutes?: number;
+      equipmentAccess?: (
+        "bodyweight" | "dumbbells" | "barbell" | "rack" | "bench" | "cables" | "machines" | "bands"
+      )[];
+      dietPreference?: ("vegetarian" | "eggetarian" | "vegan" | "omnivore") | null;
+      /** @constant */
+      safetyAcknowledged?: true;
+      currentStep?: number;
     };
     ErrorEnvelope: {
       error: {
@@ -162,6 +237,24 @@ export interface components {
         "application/json": components["schemas"]["ErrorEnvelope"];
       };
     };
+    /** @description The access token lacks the required operation scope */
+    InsufficientScope: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ErrorEnvelope"];
+      };
+    };
+    /** @description The Idempotency-Key was previously used for a different request */
+    IdempotencyConflict: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ErrorEnvelope"];
+      };
+    };
     /** @description No active profile exists for this identity */
     ProfileNotFound: {
       headers: {
@@ -191,6 +284,24 @@ export interface components {
     };
     /** @description The bounded profile storage operation timed out */
     ProfileRequestTimeout: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ErrorEnvelope"];
+      };
+    };
+    /** @description The bounded onboarding storage operation timed out */
+    OnboardingRequestTimeout: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ErrorEnvelope"];
+      };
+    };
+    /** @description No active onboarding owner exists for this identity */
+    OnboardingNotFound: {
       headers: {
         [name: string]: unknown;
       };
@@ -324,6 +435,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["InsufficientScope"];
       404: components["responses"]["ProfileNotFound"];
       500: components["responses"]["InternalError"];
       504: components["responses"]["ProfileRequestTimeout"];
@@ -359,12 +471,73 @@ export interface operations {
       };
       400: components["responses"]["InvalidRequest"];
       401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["InsufficientScope"];
       404: components["responses"]["ProfileNotFound"];
       409: components["responses"]["VersionConflict"];
       415: components["responses"]["InvalidRequest"];
       422: components["responses"]["ValidationFailed"];
       500: components["responses"]["InternalError"];
       504: components["responses"]["ProfileRequestTimeout"];
+    };
+  };
+  getOnboarding: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current resumable onboarding state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OnboardingState"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["InsufficientScope"];
+      404: components["responses"]["OnboardingNotFound"];
+      500: components["responses"]["InternalError"];
+      504: components["responses"]["OnboardingRequestTimeout"];
+    };
+  };
+  updateOnboarding: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateOnboarding"];
+      };
+    };
+    responses: {
+      /** @description Persisted onboarding state; identical replays return the original response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OnboardingState"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["InsufficientScope"];
+      404: components["responses"]["OnboardingNotFound"];
+      409: components["responses"]["IdempotencyConflict"];
+      415: components["responses"]["InvalidRequest"];
+      422: components["responses"]["ValidationFailed"];
+      500: components["responses"]["InternalError"];
+      504: components["responses"]["OnboardingRequestTimeout"];
     };
   };
 }

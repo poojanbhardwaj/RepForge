@@ -5,7 +5,13 @@ export default function HomePage() {
         <a className="brand" href="#top" aria-label="RepForge home">
           RepForge
         </a>
-        <a href="#principles">Principles</a>
+        <div className="nav-actions">
+          <a href="#principles">Principles</a>
+          <a href="/auth/login?returnTo=/app">Log in</a>
+          <a className="button-link compact" href="/auth/login?screen_hint=signup&returnTo=/app">
+            Create account
+          </a>
+        </div>
       </nav>
       <section className="hero" id="top">
         <p className="eyebrow">Built for a calmer gym session</p>
@@ -15,7 +21,7 @@ export default function HomePage() {
           fast logging, transparent progression, flexible schedules, and realistic nutrition habits.
         </p>
         <p className="notice" role="status">
-          Closed local bootstrap only. No public accounts or subscriptions are enabled.
+          Authentication and onboarding are under local verification. No subscriptions are enabled.
         </p>
       </section>
       <section aria-labelledby="principles-heading" className="principles" id="principles">

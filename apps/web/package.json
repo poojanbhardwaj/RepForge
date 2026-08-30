@@ -13,6 +13,8 @@
     "build": "next build"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "4.28.0",
+    "@repforge/api-client": "workspace:*",
     "@repforge/ui-tokens": "workspace:*",
     "next": "16.3.3",
     "react": "19.2.8",

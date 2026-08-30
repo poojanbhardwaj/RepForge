@@ -46,6 +46,44 @@ func TestLoadAcceptsLocalDevelopmentAuth(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsOIDCAndRejectsIncompleteOrInsecureOIDC(t *testing.T) {
+	clearPostgresRedirectEnvironment(t)
+	validOIDC := validValues()
+	validOIDC["AUTH_MODE"] = "oidc"
+	validOIDC["OIDC_ISSUER"] = "https://repforge-dev-poojan.jp.auth0.com/"
+	validOIDC["OIDC_AUDIENCE"] = "https://api.dev.repforge.invalid"
+	validOIDC["OIDC_MOBILE_CLIENT_ID"] = "mobile-client"
+	validOIDC["OIDC_WEB_CLIENT_ID"] = "web-client"
+	if _, err := LoadWithLookup(lookup(validOIDC)); err != nil {
+		t.Fatalf("valid OIDC config: %v", err)
+	}
+	for name, mutate := range map[string]func(map[string]string){
+		"http issuer":           func(values map[string]string) { values["OIDC_ISSUER"] = "http://issuer.invalid/" },
+		"issuer user info":      func(values map[string]string) { values["OIDC_ISSUER"] = "https://user@issuer.invalid/" },
+		"issuer path":           func(values map[string]string) { values["OIDC_ISSUER"] = "https://issuer.invalid/path/" },
+		"missing audience":      func(values map[string]string) { values["OIDC_AUDIENCE"] = "" },
+		"http audience":         func(values map[string]string) { values["OIDC_AUDIENCE"] = "http://api.invalid" },
+		"missing mobile client": func(values map[string]string) { values["OIDC_MOBILE_CLIENT_ID"] = "" },
+		"spaced mobile client":  func(values map[string]string) { values["OIDC_MOBILE_CLIENT_ID"] = " mobile-client" },
+		"placeholder client": func(values map[string]string) {
+			values["OIDC_MOBILE_CLIENT_ID"] = "__POPULATE_AUTH0_MOBILE_CLIENT_ID__"
+		},
+		"duplicate client":     func(values map[string]string) { values["OIDC_WEB_CLIENT_ID"] = "mobile-client" },
+		"unsafe terms version": func(values map[string]string) { values["TERMS_VERSION"] = "draft terms" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			values := make(map[string]string, len(validOIDC))
+			for key, value := range validOIDC {
+				values[key] = value
+			}
+			mutate(values)
+			if _, err := LoadWithLookup(lookup(values)); err == nil {
+				t.Fatal("expected OIDC configuration rejection")
+			}
+		})
+	}
+}
+
 func TestLoadRejectsDevelopmentAuthOutsideLocalOrTest(t *testing.T) {
 	clearPostgresRedirectEnvironment(t)
 	for _, environment := range []string{"staging", "production"} {

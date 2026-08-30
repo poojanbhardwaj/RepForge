@@ -63,4 +63,28 @@ describe("RepForge API client", () => {
     expect(request.method).toBe("PATCH");
     expect(request.url).toBe("http://localhost:8080/v1/me");
   });
+
+  it("awaits an OIDC token and forwards onboarding idempotency and nullable preferences", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ state: "in_progress" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const client = createRepForgeClient({
+      baseUrl: "https://api.example.test",
+      getAccessToken: async () => "synthetic-oidc-token",
+    });
+
+    await client.updateOnboarding(
+      { currentStep: 2, dietPreference: null },
+      "12345678-1234-4234-8234-123456789012",
+    );
+
+    const request = fetchMock.mock.calls[0]?.[0] as Request;
+    expect(request.url).toBe("https://api.example.test/v1/onboarding");
+    expect(request.headers.get("Authorization")).toBe("Bearer synthetic-oidc-token");
+    expect(request.headers.get("Idempotency-Key")).toBe("12345678-1234-4234-8234-123456789012");
+    expect(await request.json()).toMatchObject({ currentStep: 2, dietPreference: null });
+  });
 });

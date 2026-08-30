@@ -35,7 +35,7 @@ beforeEach(() => {
 
 it("shows loading and then the accessible profile form", async () => {
   let resolveProfile!: (value: Me) => void;
-  const client: RepForgeClient = {
+  const client: Pick<RepForgeClient, "getMe" | "updateMe"> = {
     getMe: jest.fn(
       () =>
         new Promise((resolve) => {
@@ -54,7 +54,7 @@ it("shows loading and then the accessible profile form", async () => {
 });
 
 it("validates and saves a profile update", async () => {
-  const client: RepForgeClient = {
+  const client: Pick<RepForgeClient, "getMe" | "updateMe"> = {
     getMe: jest.fn().mockResolvedValue(me),
     updateMe: jest
       .fn()
@@ -75,7 +75,7 @@ it("validates and saves a profile update", async () => {
 
 it("shows an offline state and does not offer an unsafe write", async () => {
   jest.mocked(useNetInfo).mockReturnValue({ isConnected: false } as ReturnType<typeof useNetInfo>);
-  const client: RepForgeClient = {
+  const client: Pick<RepForgeClient, "getMe" | "updateMe"> = {
     getMe: jest.fn().mockRejectedValue(new TypeError("Network unavailable")),
     updateMe: jest.fn(),
   };
@@ -89,7 +89,7 @@ it("shows a safe conflict message and refreshes stale profile data", async () =>
     .fn()
     .mockResolvedValueOnce(me)
     .mockResolvedValueOnce({ ...me, profile: { ...me.profile, version: 2 } });
-  const client: RepForgeClient = {
+  const client: Pick<RepForgeClient, "getMe" | "updateMe"> = {
     getMe,
     updateMe: jest
       .fn()
@@ -120,7 +120,7 @@ it("preserves a dirty draft and its conflict basis across background refetches",
     .mockResolvedValueOnce(me)
     .mockResolvedValueOnce(serverRefresh)
     .mockResolvedValueOnce(conflictRefresh);
-  const client: RepForgeClient = {
+  const client: Pick<RepForgeClient, "getMe" | "updateMe"> = {
     getMe,
     updateMe: jest
       .fn()
@@ -142,7 +142,7 @@ it("preserves a dirty draft and its conflict basis across background refetches",
   const input = await screen.findByLabelText("Display name");
   await fireEvent.changeText(input, "Unsaved draft");
   await act(async () => {
-    await queryClient.refetchQueries({ queryKey: ["profile", "me"] });
+    await queryClient.refetchQueries({ queryKey: ["profile", "me", "local"] });
   });
   await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
   expect(input).toHaveDisplayValue("Unsaved draft");

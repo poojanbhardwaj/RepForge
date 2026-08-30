@@ -1,5 +1,5 @@
-version: 1
-reviewed: 2026-08-28
+version: 2
+reviewed: 2026-08-30
 fields:
   - name: users.id
     purpose: opaque account ownership key
@@ -37,3 +37,47 @@ fields:
     retention: legal_retention_tbd
     deletion_path: privacy_retention_policy_tbd
     owner: privacy_owner_tbd
+  - name: user_onboarding.adult_and_safety_acceptance_times
+    purpose: enforce adult-only and safety-boundary onboarding
+    classification: confidential
+    legal_basis: account_safety_pending_legal_review
+    storage: postgresql
+    recipients: [repforge_api, user_mobile_app, user_web_app]
+    retention: legal_and_account_retention_tbd
+    deletion_path: privacy_retention_policy_tbd
+    owner: product_safety_owner_tbd
+  - name: user_onboarding.training_preferences
+    purpose: resume setup and later personalize nonmedical training behavior
+    classification: sensitive_fitness_health_adjacent
+    fields:
+      [
+        timezone,
+        units,
+        primary_goal,
+        experience_level,
+        weekly_availability,
+        session_duration_minutes,
+        equipment_access,
+        optional_diet_preference,
+      ]
+    storage: postgresql
+    recipients: [repforge_api, user_mobile_app, user_web_app]
+    retention: account_lifetime_or_shorter_tbd
+    deletion_path: account_deletion_job_tbd
+    owner: product_privacy_owner_tbd
+  - name: onboarding_idempotency.request_hash_and_response_snapshot
+    purpose: safe retry and authoritative replay of onboarding writes
+    classification: confidential
+    storage: postgresql
+    recipients: [repforge_api]
+    retention: bounded_retry_window_cleanup_tbd
+    deletion_path: cascade_with_user_and_retention_job_tbd
+    owner: platform_owner_tbd
+  - name: auth0.identity_and_session_metadata
+    purpose: authenticate mobile and web users
+    classification: confidential
+    storage: auth0_and_native_protected_storage_or_encrypted_web_cookie
+    recipients: [auth0, repforge_mobile_app, repforge_web_server, repforge_api]
+    retention: vendor_and_session_policy_pending_review
+    deletion_path: account_deletion_and_vendor_log_process_tbd
+    owner: identity_privacy_owner_tbd
