@@ -46,6 +46,23 @@ describe("OnboardingClient", () => {
     expect(screen.getByRole("checkbox", { name: "I confirm I am 18 or older" })).toBeChecked();
     expect(screen.getByLabelText("Training days per week (1–7)")).toHaveValue(4);
     expect(screen.getByRole("checkbox", { name: "dumbbells" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "bodyweight" })).not.toBeChecked();
+  });
+
+  it.each([
+    ["null", null],
+    ["empty", []],
+  ])("defaults %s equipment access to bodyweight", async (_label, equipmentAccess) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ ...incompleteState, equipmentAccess })),
+    );
+    render(<OnboardingClient userName="Pooja" />);
+
+    await screen.findByRole("heading", { name: "Set up your training" });
+
+    expect(screen.getByRole("checkbox", { name: "bodyweight" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "dumbbells" })).not.toBeChecked();
   });
 
   it("shows a safe error and retries restoration", async () => {
@@ -123,6 +140,40 @@ describe("OnboardingClient", () => {
     expect(new Headers(firstSave.headers).get("Idempotency-Key")).toBe(
       new Headers(retry.headers).get("Idempotency-Key"),
     );
+    expect(firstSave.body).toBe(retry.body);
+  });
+
+  it("distinguishes missing write permission and offers a fresh-login action", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(incompleteState))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: "insufficient_scope",
+              message: "The access token does not grant the required scope.",
+            },
+          },
+          403,
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<OnboardingClient userName="Pooja" />);
+    await screen.findByRole("heading", { name: "Set up your training" });
+    fireEvent.change(screen.getByLabelText("Timezone"), { target: { value: "Europe/London" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save progress" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "RepForge does not have permission to save onboarding",
+    );
+    expect(screen.getByRole("link", { name: "Log out and sign in again" })).toHaveAttribute(
+      "href",
+      "/auth/logout",
+    );
+    expect(screen.getByRole("button", { name: "Retry the same save" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Timezone")).toHaveValue("Europe/London");
   });
 
   it("sends an explicit null when the optional diet preference is cleared", async () => {

@@ -10,6 +10,8 @@ Use a dedicated nonproduction tenant and separate applications:
 - Regular Web Application for Next.js; its client secret is server-only.
 - API with the configured HTTPS audience, RFC 9068 access-token profile, and `profile:read` / `profile:write` permissions.
 
+For the API, enable **Allow Offline Access** on its **Settings** tab. On the API's **Application Access** tab, edit the Regular Web Application's **User-Delegated Access** grant and require both `profile:read` and `profile:write`. Those permissions are the maximum the application may receive for the API audience; defining the permissions on the API alone is not sufficient when per-app authorization is enabled. After changing a grant, fully log out and start a new login so the encrypted web session contains a newly issued token set.
+
 The native package identifiers are `local.repforge.bootstrap` on Android and iOS, and the custom scheme is `repforge`. The native plugin domain and public domain variable must match the tenant. Register the SDK-generated callback/logout forms for the configured domain:
 
 - `repforge://<tenant-domain>/android/local.repforge.bootstrap/callback`

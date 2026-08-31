@@ -153,9 +153,19 @@ export interface components {
       experienceLevel: ("beginner" | "intermediate") | null;
       weeklyAvailability: number | null;
       sessionDurationMinutes: number | null;
-      equipmentAccess: (
-        "bodyweight" | "dumbbells" | "barbell" | "rack" | "bench" | "cables" | "machines" | "bands"
-      )[];
+      /** @description Null until equipment access is first saved. */
+      equipmentAccess:
+        | (
+            | "bodyweight"
+            | "dumbbells"
+            | "barbell"
+            | "rack"
+            | "bench"
+            | "cables"
+            | "machines"
+            | "bands"
+          )[]
+        | null;
       dietPreference: ("vegetarian" | "eggetarian" | "vegan" | "omnivore") | null;
       safetyAcknowledgedAt: string | null;
       completedAt: string | null;

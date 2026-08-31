@@ -41,7 +41,7 @@ export async function proxyOnboarding(request: NextRequest, method: "GET" | "PAT
   try {
     session = await auth0.getSession(request);
   } catch {
-    return bffError(401, "session_expired", "Sign in again to continue.");
+    return bffError(401, "session_invalid", "Log out and sign in again to continue.");
   }
   if (!session) return bffError(401, "session_expired", "Sign in again to continue.");
 
@@ -73,25 +73,34 @@ export async function proxyOnboarding(request: NextRequest, method: "GET" | "PAT
     ) {
       return bffError(413, "request_too_large", "The request is too large.");
     }
-    body = await request.text();
-    if (new TextEncoder().encode(body).byteLength > maximumBodyBytes) {
-      return bffError(413, "request_too_large", "The request is too large.");
-    }
-    try {
-      const parsed: unknown = JSON.parse(body);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
-      body = JSON.stringify(parsed);
-    } catch {
-      return bffError(400, "invalid_json", "The request body must be a JSON object.");
-    }
   }
 
   const cookieResponse = new NextResponse(null);
   let token: string;
   try {
     ({ token } = await auth0.getAccessToken(request, cookieResponse));
-  } catch {
-    return bffError(401, "session_expired", "Sign in again to continue.");
+  } catch (error) {
+    return withCookies(accessTokenFailure(error), cookieResponse);
+  }
+
+  if (method === "PATCH") {
+    body = await request.text();
+    if (new TextEncoder().encode(body).byteLength > maximumBodyBytes) {
+      return withCookies(
+        bffError(413, "request_too_large", "The request is too large."),
+        cookieResponse,
+      );
+    }
+    try {
+      const parsed: unknown = JSON.parse(body);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+      body = JSON.stringify(parsed);
+    } catch {
+      return withCookies(
+        bffError(400, "invalid_json", "The request body must be a JSON object."),
+        cookieResponse,
+      );
+    }
   }
 
   let config;
@@ -118,6 +127,7 @@ export async function proxyOnboarding(request: NextRequest, method: "GET" | "PAT
           ? {
               "Content-Type": "application/json",
               "Idempotency-Key": request.headers.get("idempotency-key")!,
+              Origin: config.appBaseUrl,
             }
           : {}),
       },
@@ -204,4 +214,22 @@ function bffError(status: number, code: string, message: string) {
     { error: { code, message } },
     { status, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+function accessTokenFailure(error: unknown): NextResponse {
+  const code =
+    error && typeof error === "object" && "code" in error && typeof error.code === "string"
+      ? error.code
+      : null;
+  if (code === "missing_session" || code === "session_expired") {
+    return bffError(401, "session_expired", "Sign in again to continue.");
+  }
+  if (code === "missing_refresh_token") {
+    return bffError(
+      401,
+      "reauthentication_required",
+      "Log out and sign in again to renew API access.",
+    );
+  }
+  return bffError(503, "authentication_unavailable", "Authentication is unavailable.");
 }

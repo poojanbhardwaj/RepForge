@@ -25,7 +25,7 @@ const savedState: OnboardingState = {
   experienceLevel: "beginner",
   weeklyAvailability: 4,
   sessionDurationMinutes: 60,
-  equipmentAccess: ["bodyweight", "dumbbells"],
+  equipmentAccess: ["dumbbells"],
   dietPreference: "vegetarian",
   safetyAcknowledgedAt: timestamp,
   completedAt: null,
@@ -87,6 +87,23 @@ it("restores the server snapshot without effect-driven hydration", async () => {
   expect(screen.getByLabelText("Training days per week (1–7)")).toHaveDisplayValue("4");
   expect(screen.getByRole("checkbox", { name: "I accept Terms terms-1" })).toBeChecked();
   expect(screen.getByRole("checkbox", { name: "dumbbells" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "bodyweight" })).not.toBeChecked();
+});
+
+it.each([
+  ["null", null],
+  ["empty", []],
+])("defaults %s equipment access to bodyweight", async (_label, equipmentAccess) => {
+  const client = createClient({
+    getOnboarding: jest.fn().mockResolvedValue({ ...savedState, equipmentAccess }),
+  });
+
+  await render(<OnboardingScreen client={client} onComplete={jest.fn()} onLogout={jest.fn()} />, {
+    wrapper: createWrapper(),
+  });
+
+  expect(await screen.findByRole("checkbox", { name: "bodyweight" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "dumbbells" })).not.toBeChecked();
 });
 
 it("preserves edits while a new consent version re-gates acceptance", async () => {

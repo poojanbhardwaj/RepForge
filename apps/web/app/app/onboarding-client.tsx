@@ -18,6 +18,7 @@ const equipmentOptions = [
 ] as const;
 type Equipment = (typeof equipmentOptions)[number];
 type Submission = { input: UpdateOnboarding; key: string; step: number };
+type FormError = { message: string; requiresFreshLogin: boolean };
 
 interface FormState {
   adultAttested: boolean;
@@ -138,7 +139,7 @@ function OnboardingForm({
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState(initialState);
   const [form, setForm] = useState(() => hydrate(initialState));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [lastSubmission, setLastSubmission] = useState<Submission | null>(null);
 
@@ -157,7 +158,7 @@ function OnboardingForm({
         track({ name: "onboarding_progress_saved", source: "web", step: submission.step });
       }
     } catch (caught) {
-      setError(messageFor(caught));
+      setError(formErrorFor(caught));
     } finally {
       setSaving(false);
     }
@@ -176,7 +177,10 @@ function OnboardingForm({
       duration > 180 ||
       form.equipmentAccess.length === 0
     ) {
-      setError("Check your timezone, availability, session duration, and equipment choices.");
+      setError({
+        message: "Check your timezone, availability, session duration, and equipment choices.",
+        requiresFreshLogin: false,
+      });
       return;
     }
     if (
@@ -186,7 +190,10 @@ function OnboardingForm({
         form.privacyAcceptedVersion !== state.requiredPrivacyVersion ||
         !form.safetyAcknowledged)
     ) {
-      setError("Accept the adult, Terms, Privacy, and safety acknowledgements to finish.");
+      setError({
+        message: "Accept the adult, Terms, Privacy, and safety acknowledgements to finish.",
+        requiresFreshLogin: false,
+      });
       return;
     }
     const step = complete ? 6 : form.safetyAcknowledged ? 5 : form.adultAttested ? 3 : 1;
@@ -351,7 +358,7 @@ function OnboardingForm({
         />
         {error ? (
           <p className="error-text" role="alert">
-            {error}
+            {error.message}
           </p>
         ) : null}
         {notice ? (
@@ -381,6 +388,11 @@ function OnboardingForm({
               Retry the same save
             </button>
           ) : null}
+          {error?.requiresFreshLogin ? (
+            <a className="text-button" href="/auth/logout">
+              Log out and sign in again
+            </a>
+          ) : null}
         </div>
       </form>
     </main>
@@ -399,7 +411,10 @@ function hydrate(state: OnboardingState): FormState {
     experienceLevel: state.experienceLevel ?? "beginner",
     weeklyAvailability: String(state.weeklyAvailability ?? 3),
     sessionDurationMinutes: String(state.sessionDurationMinutes ?? 45),
-    equipmentAccess: state.equipmentAccess.length ? state.equipmentAccess : ["bodyweight"],
+    equipmentAccess:
+      state.equipmentAccess === null || state.equipmentAccess.length === 0
+        ? ["bodyweight"]
+        : state.equipmentAccess,
     dietPreference: state.dietPreference ?? "",
     safetyAcknowledged: Boolean(state.safetyAcknowledgedAt),
   };
@@ -455,17 +470,51 @@ async function requestOnboarding(
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const envelope = data as { error?: { code?: string; message?: string } } | null;
-    throw new Error(
-      envelope?.error?.code === "session_expired"
-        ? "Your session expired. Sign in again to continue."
-        : (envelope?.error?.message ?? "We couldn’t save your progress."),
+    throw new OnboardingRequestError(
+      envelope?.error?.code ?? null,
+      envelope?.error?.message ?? "We couldn’t save your progress.",
     );
   }
   return data as OnboardingState;
 }
 
 function messageFor(caught: unknown): string {
+  if (caught instanceof OnboardingRequestError) {
+    if (caught.code === "session_expired") {
+      return "Your session expired. Sign in again to continue.";
+    }
+    if (caught.code === "session_invalid" || caught.code === "reauthentication_required") {
+      return "Your API access needs to be renewed. Log out and sign in again to continue.";
+    }
+    if (caught.code === "insufficient_scope") {
+      return "You’re signed in, but RepForge does not have permission to save onboarding. Log out and sign in again after access is updated.";
+    }
+  }
   return caught instanceof Error ? caught.message : "Something went wrong.";
+}
+
+function formErrorFor(caught: unknown): FormError {
+  return {
+    message: messageFor(caught),
+    requiresFreshLogin:
+      caught instanceof OnboardingRequestError &&
+      [
+        "insufficient_scope",
+        "reauthentication_required",
+        "session_expired",
+        "session_invalid",
+      ].includes(caught.code ?? ""),
+  };
+}
+
+class OnboardingRequestError extends Error {
+  constructor(
+    readonly code: string | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = "OnboardingRequestError";
+  }
 }
 function ProductNav({ userName }: { userName: string }) {
   return (

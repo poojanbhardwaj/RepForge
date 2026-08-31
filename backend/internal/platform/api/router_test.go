@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,15 @@ type readyStub struct{}
 func (readyStub) Ping(context.Context) error { return nil }
 
 type handlerStub struct{}
+
+type scopedAuthenticator struct{ scopes []string }
+
+func (authenticator scopedAuthenticator) Authenticate(_ context.Context, token string) (auth.Principal, error) {
+	if token != "scoped-token" {
+		return auth.Principal{}, auth.ErrUnauthenticated
+	}
+	return auth.Principal{Provider: "test", Subject: "subject", Scopes: authenticator.scopes}, nil
+}
 
 func (handlerStub) Get(response http.ResponseWriter, _ *http.Request) {
 	response.WriteHeader(http.StatusOK)
@@ -69,5 +79,41 @@ func TestCORSAllowsOnlyConfiguredPreflightSurface(t *testing.T) {
 	if response.Header().Get("Access-Control-Allow-Methods") != "GET, PATCH, OPTIONS" ||
 		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key" {
 		t.Fatalf("preflight headers=%#v", response.Header())
+	}
+}
+
+func TestOnboardingReadAndWriteScopeMatrix(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		scopes     []string
+		wantStatus int
+	}{
+		{name: "authenticated read succeeds", method: http.MethodGet, scopes: []string{"profile:read"}, wantStatus: http.StatusOK},
+		{name: "write without permission is forbidden", method: http.MethodPatch, scopes: []string{"profile:read"}, wantStatus: http.StatusForbidden},
+		{name: "write with permission succeeds", method: http.MethodPatch, scopes: []string{"profile:read", "profile:write"}, wantStatus: http.StatusOK},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			router := NewRouter(Options{
+				Readiness: readyStub{}, ReadinessTimeout: time.Second, Users: handlerStub{}, Onboarding: handlerStub{},
+				Authenticator: scopedAuthenticator{scopes: testCase.scopes},
+			})
+			request := httptest.NewRequest(testCase.method, "/v1/onboarding", nil)
+			request.Header.Set("Authorization", "Bearer scoped-token")
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, testCase.wantStatus, response.Body.String())
+			}
+			if testCase.wantStatus == http.StatusForbidden {
+				if !strings.Contains(response.Header().Get("WWW-Authenticate"), `error="insufficient_scope"`) ||
+					!strings.Contains(response.Body.String(), `"code":"insufficient_scope"`) {
+					t.Fatalf("missing insufficient-scope response: headers=%v body=%s", response.Header(), response.Body.String())
+				}
+			}
+		})
 	}
 }

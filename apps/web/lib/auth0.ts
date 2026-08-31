@@ -11,6 +11,9 @@ const requiredEnvironment = [
   "API_BASE_URL",
 ] as const;
 
+export const WEB_AUTHORIZATION_SCOPE =
+  "openid profile email offline_access profile:read profile:write";
+
 export interface WebAuthConfig {
   domain: string;
   clientId: string;
@@ -154,7 +157,7 @@ export function getAuth0(): Auth0Client {
     signInReturnToPath: "/app",
     authorizationParameters: {
       audience: config.audience,
-      scope: "openid profile email offline_access profile:read profile:write",
+      scope: WEB_AUTHORIZATION_SCOPE,
     },
     session: {
       rolling: true,

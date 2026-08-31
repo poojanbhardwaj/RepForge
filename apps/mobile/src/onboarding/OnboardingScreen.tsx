@@ -173,7 +173,9 @@ function OnboardingForm({
     String(serverState.sessionDurationMinutes ?? 45),
   );
   const [equipment, setEquipment] = useState<Equipment[]>(() =>
-    serverState.equipmentAccess.length > 0 ? [...serverState.equipmentAccess] : ["bodyweight"],
+    serverState.equipmentAccess === null || serverState.equipmentAccess.length === 0
+      ? ["bodyweight"]
+      : [...serverState.equipmentAccess],
   );
   const [diet, setDiet] = useState<"" | "vegetarian" | "eggetarian" | "vegan" | "omnivore">(
     () => serverState.dietPreference ?? "",

@@ -341,12 +341,15 @@ components:
         sessionDurationMinutes:
           oneOf: [{ type: integer, minimum: 15, maximum: 180 }, { type: "null" }]
         equipmentAccess:
-          type: array
-          maxItems: 8
-          uniqueItems: true
-          items:
-            type: string
-            enum: [bodyweight, dumbbells, barbell, rack, bench, cables, machines, bands]
+          description: Null until equipment access is first saved.
+          oneOf:
+            - type: array
+              maxItems: 8
+              uniqueItems: true
+              items:
+                type: string
+                enum: [bodyweight, dumbbells, barbell, rack, bench, cables, machines, bands]
+            - type: "null"
         dietPreference:
           oneOf:
             [{ type: string, enum: [vegetarian, eggetarian, vegan, omnivore] }, { type: "null" }]

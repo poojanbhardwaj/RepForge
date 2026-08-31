@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readWebAuthConfig, WebAuthConfigurationError } from "./auth0";
+import { readWebAuthConfig, WEB_AUTHORIZATION_SCOPE, WebAuthConfigurationError } from "./auth0";
 
 const validEnvironment: NodeJS.ProcessEnv = {
   NODE_ENV: "test",
@@ -14,6 +14,18 @@ const validEnvironment: NodeJS.ProcessEnv = {
 };
 
 describe("readWebAuthConfig", () => {
+  it("requests the API audience, read/write permissions, and server-side refresh access", () => {
+    expect(WEB_AUTHORIZATION_SCOPE.split(" ")).toEqual([
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "profile:read",
+      "profile:write",
+    ]);
+    expect(readWebAuthConfig(validEnvironment).audience).toBe("https://api.example.invalid");
+  });
+
   it("accepts canonical local configuration without exposing secrets to public variables", () => {
     const config = readWebAuthConfig(validEnvironment);
     expect(config.appBaseUrl).toBe("http://127.0.0.1:3000");

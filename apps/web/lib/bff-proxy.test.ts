@@ -35,6 +35,7 @@ describe("proxyOnboarding", () => {
     mocks.getAccessToken
       .mockReset()
       .mockImplementation((_request: NextRequest, response: NextResponse) => {
+        expect(_request.bodyUsed).toBe(false);
         response.cookies.set("appSession", "synthetic-refreshed-session", {
           httpOnly: true,
           sameSite: "lax",
@@ -58,7 +59,29 @@ describe("proxyOnboarding", () => {
     mocks.getSession.mockRejectedValueOnce(new Error("synthetic corrupt session"));
     const unreadable = await proxyOnboarding(request("GET"), "GET");
     expect(unreadable.status).toBe(401);
+    expect(await unreadable.json()).toMatchObject({ error: { code: "session_invalid" } });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not label unrelated token acquisition failures as an expired session", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    mocks.getAccessToken.mockRejectedValueOnce(
+      Object.assign(new Error("synthetic missing refresh token"), {
+        code: "missing_refresh_token",
+      }),
+    );
+    const reauthentication = await proxyOnboarding(request("PATCH"), "PATCH");
+    expect(reauthentication.status).toBe(401);
+    expect(await reauthentication.json()).toMatchObject({
+      error: { code: "reauthentication_required" },
+    });
+
+    mocks.getAccessToken.mockRejectedValueOnce(new TypeError("synthetic request failure"));
+    const unavailable = await proxyOnboarding(request("PATCH"), "PATCH");
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.json()).toMatchObject({
+      error: { code: "authentication_unavailable" },
+    });
   });
 
   it("returns the defined status for an invalid idempotency key", async () => {
@@ -90,7 +113,37 @@ describe("proxyOnboarding", () => {
     expect(url).toBe("http://127.0.0.1:8080/v1/onboarding");
     expect(headers.get("Authorization")).toBe("Bearer synthetic-access-token");
     expect(headers.get("Idempotency-Key")).toBe("12345678-1234-4234-8234-123456789012");
+    expect(headers.get("Origin")).toBe("http://127.0.0.1:3000");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(init.body).toBe(JSON.stringify({ currentStep: 2 }));
     expect(init.cache).toBe("no-store");
+  });
+
+  it("preserves the backend insufficient-scope status and safe envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "insufficient_scope",
+              message: "The access token does not grant the required scope.",
+            },
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    const response = await proxyOnboarding(request("PATCH"), "PATCH");
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "insufficient_scope",
+        message: "The access token does not grant the required scope.",
+      },
+    });
   });
 
   it("retains a refreshed session cookie when the upstream API is unavailable", async () => {
